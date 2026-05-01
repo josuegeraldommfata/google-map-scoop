@@ -17,11 +17,40 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Sistema de Logs em Tempo Real (SSE)
+let logClients = [];
+const broadcastLog = (msg) => {
+  logClients.forEach(res => res.write(`data: ${JSON.stringify({ msg, timestamp: new Date().toISOString() })}\n\n`));
+};
+
+// Sobrescreve o console.log para capturar os logs e enviar pro front
+const originalLog = console.log;
+console.log = (...args) => {
+  const msg = args.join(' ');
+  originalLog(...args);
+  if (msg.startsWith('[scraper]') || msg.startsWith('[✓]')) {
+    broadcastLog(msg);
+  }
+};
+
 const PORT = process.env.PORT || 3001;
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+
+// Endpoint de Logs Real-time
+app.get('/api/logs', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  logClients.push(res);
+  req.on('close', () => {
+    logClients = logClients.filter(c => c !== res);
+  });
+});
 
 app.post('/api/scrape-leads', async (req, res) => {
   const { niche, keywords = [], cities = [], state = 'SP', quantity = 20 } = req.body;

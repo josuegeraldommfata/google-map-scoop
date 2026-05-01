@@ -1,22 +1,42 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { SearchForm } from "@/components/SearchForm";
 import { StatsCards } from "@/components/StatsCards";
 import { LeadsTable } from "@/components/LeadsTable";
 import { SearchHistoryPanel } from "@/components/SearchHistoryPanel";
 import { Lead, SearchQuery, SearchHistory } from "@/types/lead";
-import { Crosshair, Zap } from "lucide-react";
+import { Crosshair, Zap, Terminal as TerminalIcon } from "lucide-react";
 import { toast } from "sonner";
+import { Card } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function Index() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [history, setHistory] = useState<SearchHistory[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [logs, setLogs] = useState<{msg: string, timestamp: string}[]>([]);
+  const logEndRef = useRef<HTMLDivElement>(null);
 
   const hotLeads = leads.filter(l => l.type === 'hot').length;
   const coldLeads = leads.filter(l => l.type === 'cold').length;
 
+  // Auto-scroll para os logs
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
+
+  // Conexão de Logs em tempo real
+  useEffect(() => {
+    const eventSource = new EventSource('/api/logs');
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setLogs(prev => [...prev.slice(-49), data]); // Mantém os últimos 50
+    };
+    return () => eventSource.close();
+  }, []);
+
   const handleSearch = useCallback(async (query: SearchQuery) => {
     setIsSearching(true);
+    setLogs([]); // Limpa logs para nova busca
     try {
       const res = await fetch('/api/scrape-leads', {
         method: 'POST',
@@ -35,7 +55,7 @@ export default function Index() {
       if (newLeads.length === 0) {
         toast.warning('Nenhum lead encontrado. Tente outro nicho ou cidade.');
       } else {
-        toast.success(`${newLeads.length} leads capturados com dados do Google Maps!`);
+        toast.success(`${newLeads.length} leads capturados com sucesso!`);
       }
 
       setLeads(prev => {
@@ -57,11 +77,7 @@ export default function Index() {
       }, ...prev]);
     } catch (e: any) {
       console.error('Erro na busca:', e);
-      if (e?.message?.includes('fetch') || e?.message?.includes('Failed')) {
-        toast.error('Servidor scraper offline. Inicie com: node server/scraper.mjs');
-      } else {
-        toast.error(`Erro: ${e?.message || 'Tente novamente'}`);
-      }
+      toast.error(`Erro: ${e?.message || 'Tente novamente'}`);
     } finally {
       setIsSearching(false);
     }
@@ -92,24 +108,57 @@ export default function Index() {
 
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+          {/* Coluna Central - Busca */}
+          <div className="xl:col-span-2 space-y-6">
             <SearchForm onSearch={handleSearch} isSearching={isSearching} />
+            {leads.length > 0 && <StatsCards total={leads.length} hot={hotLeads} cold={coldLeads} />}
           </div>
-          <div>
+
+          {/* Coluna Direita - Console e Histórico */}
+          <div className="xl:col-span-2 space-y-6">
+            {/* Console de Logs */}
+            <Card className="bg-[#0c0c0c] border-[#1a1a1a] p-4 font-mono text-[11px]">
+              <div className="flex items-center gap-2 mb-3 text-primary">
+                <TerminalIcon className="w-4 h-4" />
+                <span className="font-bold uppercase tracking-widest">Console de Scraping</span>
+                {isSearching && <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse ml-auto" />}
+              </div>
+              <ScrollArea className="h-[215px] pr-4">
+                {logs.length === 0 ? (
+                  <div className="text-muted-foreground italic h-full flex items-center justify-center opacity-50">
+                    Aguardando início da prospecção...
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {logs.map((log, i) => (
+                      <div key={i} className="flex gap-3 border-l border-white/5 pl-3">
+                        <span className="text-white/20 whitespace-nowrap">
+                          {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
+                        </span>
+                        <span className={log.msg.startsWith('[✓]') ? "text-green-400" : "text-blue-300"}>
+                          {log.msg}
+                        </span>
+                      </div>
+                    ))}
+                    <div ref={logEndRef} />
+                  </div>
+                )}
+              </ScrollArea>
+            </Card>
+
             <SearchHistoryPanel history={history} />
           </div>
         </div>
 
         {leads.length > 0 && (
-          <>
-            <StatsCards total={leads.length} hot={hotLeads} cold={coldLeads} />
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <LeadsTable leads={leads} />
-          </>
+          </div>
         )}
 
         {leads.length === 0 && !isSearching && (
-          <div className="text-center py-20 animate-slide-up">
+          <div className="text-center py-20 animate-slide-up bg-card/10 rounded-3xl border border-white/5">
             <div className="inline-flex p-4 rounded-2xl bg-primary/5 mb-4">
               <Crosshair className="w-12 h-12 text-primary/40" />
             </div>
@@ -117,7 +166,7 @@ export default function Index() {
               Pronto para caçar leads?
             </h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Preencha o formulário acima com o nicho e as cidades desejadas para iniciar a busca automatizada no Google Maps.
+              Preencha o formulário e acompanhe o robô em tempo real no console lateral.
             </p>
           </div>
         )}
@@ -125,3 +174,4 @@ export default function Index() {
     </div>
   );
 }
+
