@@ -156,7 +156,77 @@ export default function Index() {
               </ScrollArea>
             </Card>
 
-            <SearchHistoryPanel history={history} />
+            {/* Painel de Missões (Histórico Turbinado) */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 px-1">
+                <Zap className="w-4 h-4 text-primary" />
+                <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Histórico de Missões</h2>
+              </div>
+              
+              <div className="space-y-3">
+                {history.length === 0 ? (
+                  <div className="h-[200px] rounded-xl border border-dashed border-white/5 flex flex-col items-center justify-center text-muted-foreground opacity-30 italic text-xs">
+                    Nenhuma missão registrada no banco...
+                  </div>
+                ) : (
+                  history.map((item) => {
+                    const hotEfficiency = Math.round((item.hotLeads / item.leadsFound) * 100) || 0;
+                    return (
+                      <Card key={item.id} className="bg-card/30 border-white/5 p-4 hover:border-primary/30 transition-all cursor-default group overflow-hidden relative">
+                        {/* Background Decorativo */}
+                        <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                          <Crosshair className="w-24 h-24 text-primary" />
+                        </div>
+                        
+                        <div className="flex justify-between items-start mb-3 relative z-10">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] font-mono text-primary/60">MISSION_ID: {item.id.toUpperCase()}</span>
+                              <span className="h-1 w-1 rounded-full bg-green-500 animate-pulse" />
+                            </div>
+                            <h3 className="text-sm font-bold text-foreground capitalize">
+                              {item.query.niche} em {item.query.cities[0]}
+                            </h3>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[10px] text-muted-foreground mb-1">
+                              {new Date(item.executedAt).toLocaleDateString()}
+                            </div>
+                            <div className="flex items-center gap-1 text-xs font-bold text-primary">
+                              <Zap className="w-3 h-3" />
+                              {item.leadsFound} LEADS
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Barra de Eficiência (Hot Leads) */}
+                        <div className="space-y-1.5 relative z-10">
+                          <div className="flex justify-between text-[10px] uppercase font-bold tracking-wider">
+                            <span className="text-muted-foreground">Hot Lead Index</span>
+                            <span className="text-primary">{hotEfficiency}%</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-primary/50 to-primary glow-primary rounded-full transition-all duration-1000"
+                              style={{ width: `${hotEfficiency}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex gap-2 relative z-10">
+                          <div className="px-2 py-1 rounded bg-orange-500/10 border border-orange-500/20 text-[9px] font-bold text-orange-400 uppercase">
+                            🔥 {item.hotLeads} Quentes
+                          </div>
+                          <div className="px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-bold text-blue-400 uppercase">
+                            ❄️ {item.coldLeads} Frios
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
