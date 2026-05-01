@@ -26,18 +26,17 @@ export default function Index() {
 
   // Conexão de Logs em tempo real
   useEffect(() => {
-    const LOG_URL = '/api/logs';
-
+    const LOG_URL = 'https://google-map-scoop-1.onrender.com/api/logs';
     const eventSource = new EventSource(LOG_URL);
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      setLogs(prev => [...prev.slice(-49), data]); // Mantém os últimos 50
+      setLogs(prev => [...prev, data]);
     };
     return () => eventSource.close();
   }, []);
 
-  // Detecta se está no Vercel para usar a URL da Render, senão usa local
-  const API_URL = '';
+  // URL Direta da Render (Vercel Proxy dá timeout de 10s, o scraper demora mais)
+  const API_URL = 'https://google-map-scoop-1.onrender.com';
 
   const handleSearch = useCallback(async (query: SearchQuery) => {
     setIsSearching(true);

@@ -10,21 +10,13 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// 1. Log de todas as requisições (ajuda a ver no Render se a mensagem chegou)
-app.use((req, res, next) => {
-  console.log(`[HTTP] ${req.method} ${req.url}`);
-  next();
-});
-
-// 2. CORS Híbrido (Manual + Biblioteca) - A prova de falhas
-app.use(cors({ origin: '*', credentials: true })); // Biblioteca
-
-app.use((req, res, next) => {
+// CORS GLOBAL ABSOLUTO (Pega tudo antes das rotas)
+app.all('*', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   if (req.method === 'OPTIONS') {
-    return res.status(200).send();
+    return res.status(200).end();
   }
   next();
 });
