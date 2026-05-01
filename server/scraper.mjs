@@ -117,31 +117,39 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
         console.log(`[scraper] analisando: "${name}"...`);
         await card.click();
         
-        // Sincronização Panel Title
+        // Sincronização Panel Title - Muito mais rápida agora
         try {
           await page.waitForFunction((expectedName) => {
             const panelTitle = document.querySelector('h1.DUwDvf')?.textContent || '';
+            const allText = document.body.innerText;
             const normalize = s => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-            return normalize(panelTitle).includes(normalize(expectedName)) || normalize(expectedName).includes(normalize(panelTitle));
-          }, { timeout: 5000 }, name);
-        } catch (e) { /* ignore sync timeout and try extract anyway */ }
+            return normalize(panelTitle).includes(normalize(expectedName)) || allText.includes(expectedName);
+          }, { timeout: 3000 }, name);
+        } catch (e) { /* ignore and move fast */ }
 
         const data = await page.evaluate(() => {
-          const websiteEl = document.querySelector('a[data-item-id="authority"]');
-          const website = websiteEl ? websiteEl.getAttribute('href') : null;
+          const getLink = (selector) => document.querySelector(selector)?.getAttribute('href');
+          
+          // Tenta achar o site de várias formas
+          const website = getLink('a[data-item-id="authority"]') || 
+                          getLink('a[aria-label^="Website"]') || 
+                          getLink('a[aria-label^="Sítio"]') ||
+                          Array.from(document.querySelectorAll('a')).find(a => a.href && !a.href.includes('google.com') && a.innerText.toLowerCase().includes('.'))?.href;
           
           let phone = null;
+          // Busca o telefone pelo atributo de ID ou pelo padrão de texto brasileiro
           const phoneBtn = document.querySelector('button[data-item-id^="phone:tel:"]');
           if (phoneBtn) {
             phone = phoneBtn.getAttribute('data-item-id').replace('phone:tel:', '');
           } else {
-            const allInfos = Array.from(document.querySelectorAll('.Io6YTe'));
-            const phoneInfo = allInfos.find(el => el.textContent.match(/\(\d{2}\)\s\d/));
-            if (phoneInfo) phone = phoneInfo.textContent;
+            const allElements = Array.from(document.querySelectorAll('.Io6YTe, .fontBodyMedium'));
+            const phoneEl = allElements.find(el => el.textContent.match(/\(\d{2}\)\s\d/));
+            if (phoneEl) phone = phoneEl.textContent;
           }
 
-          const addressBtn = document.querySelector('button[data-item-id="address"]');
-          const address = addressBtn ? addressBtn.textContent.trim() : (document.querySelector('.Io6YTe')?.textContent || 'Endereço não informado');
+          const address = document.querySelector('button[data-item-id="address"]')?.textContent?.trim() || 
+                          Array.from(document.querySelectorAll('.Io6YTe')).find(el => el.textContent.includes(','))?.textContent || 
+                          'Endereço não informado';
 
           return {
             name: document.querySelector('h1.DUwDvf')?.textContent || 'Sem nome',
@@ -152,8 +160,8 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
           };
         });
 
-        // WhatsApp do Telefone
-        if (data.phone && !data.whatsapp) {
+        // WhatsApp do Telefone (Regra de Ouro)
+        if (data.phone) {
           const clean = data.phone.replace(/\D/g, '');
           if (clean.length >= 10) {
             data.whatsapp = `https://wa.me/${clean.startsWith('55') ? clean : '55' + clean}`;
