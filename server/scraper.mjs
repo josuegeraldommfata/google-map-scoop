@@ -1,5 +1,5 @@
 /**
- * Google Maps Scraper Server
+ * Google Maps Scraper Server — v2
  * Extrai: nome, telefone, WhatsApp, site, Instagram
  * SEM API KEY — usa Playwright headless
  */
@@ -22,32 +22,142 @@ function normalizePhone(raw) {
 }
 
 function extractInstagramFromHtml(html) {
-  const re = /instagram\.com\/(?!p\/|reel|reels|explore|stories|accounts|about|directory|_\/|__\/|shareddata)([A-Za-z0-9_.]{2,30})/gi;
+  const re = /instagram\.com\/(?!p\/|reel|reels|explore|stories|accounts|about|directory|_\/|__\/|shareddata|highlights)([A-Za-z0-9_.]{2,30})/gi;
   const matches = [...html.matchAll(re)];
   if (!matches.length) return null;
   return '@' + matches[0][1].replace(/\/$/, '');
 }
 
 function extractWhatsAppFromHtml(html) {
-  // wa.me/5511... ou api.whatsapp.com/send?phone=5511...
   const re = /(?:wa\.me|api\.whatsapp\.com\/send[?&]phone=)\/?([0-9]{10,15})/gi;
   const m = re.exec(html);
   return m ? m[1] : null;
 }
 
-// Tenta pegar Instagram/WhatsApp do site da empresa
-async function enrichFromWebsite(page, websiteUrl) {
+// Tenta pegar Instagram/WhatsApp do site — timeout curto de 3s, não bloqueia
+async function enrichFromWebsite(context, websiteUrl) {
+  let page;
   try {
     const url = websiteUrl.startsWith('http') ? websiteUrl : 'https://' + websiteUrl;
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 8000 });
+    page = await context.newPage();
+    // 3 segundos — se o site for lento, desiste e segue
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 3000 });
     const html = await page.content();
+    await page.close().catch(() => { });
     return {
       instagram: extractInstagramFromHtml(html),
       whatsapp: extractWhatsAppFromHtml(html),
     };
   } catch {
+    if (page) await page.close().catch(() => { });
     return { instagram: null, whatsapp: null };
   }
+}
+
+// ─── Extrai dados do painel de detalhes de um negócio ─────────────────────────
+
+async function extractLeadFromPanel(page) {
+  // Nome do negócio — seletor específico do painel de detalhe do Maps
+  const name = await page.evaluate(() => {
+    // Tenta vários seletores do Maps (a UI do Google muda frequentemente)
+    const selectors = [
+      'h1.DUwDvf',
+      'h1.fontHeadlineSmall',
+      '[role="main"] h1',
+      'h1',
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el && el.innerText && el.innerText.trim().length > 1 && el.innerText.trim() !== 'Resultados') {
+        return el.innerText.trim();
+      }
+    }
+    return null;
+  });
+
+  if (!name) return null;
+
+  // Endereço
+  const address = await page.evaluate(() => {
+    // Botão com tooltip de copiar endereço
+    const addrBtn = document.querySelector('[data-tooltip="Copiar endereço"], [aria-label*="ndereço"]');
+    if (addrBtn) return addrBtn.innerText?.trim() || '';
+    // Fallback: aria-label descritivo
+    const btns = document.querySelectorAll('button[aria-label]');
+    for (const btn of btns) {
+      const lbl = btn.getAttribute('aria-label') || '';
+      if (lbl.includes(',') && (lbl.includes('SP') || lbl.includes('RJ') || lbl.includes('MG') || lbl.includes('Brasil'))) {
+        return lbl.trim();
+      }
+    }
+    return '';
+  }).catch(() => '');
+
+  // Telefone — múltiplos seletores
+  const phone = await page.evaluate(() => {
+    // data-tooltip com "telefone"
+    const phoneEl = document.querySelector('[data-tooltip*="telefone"], [data-item-id*="phone"]');
+    if (phoneEl) {
+      const raw = phoneEl.getAttribute('aria-label') || phoneEl.innerText || '';
+      return raw.replace(/[^\d+]/g, '');
+    }
+    // Busca botões com número de telefone no aria-label
+    const btns = document.querySelectorAll('button[aria-label]');
+    for (const btn of btns) {
+      const lbl = btn.getAttribute('aria-label') || '';
+      if (/\(\d{2}\)\s*\d{4,5}[\s-]?\d{4}/.test(lbl)) {
+        return lbl.replace(/[^\d+]/g, '');
+      }
+    }
+    // Span com padrão de telefone
+    const spans = document.querySelectorAll('span');
+    for (const span of spans) {
+      if (/\(\d{2}\)\s*\d{4,5}[\s-]?\d{4}/.test(span.innerText)) {
+        return span.innerText.replace(/[^\d+]/g, '');
+      }
+    }
+    return '';
+  }).catch(() => '');
+
+  // Site
+  const website = await page.evaluate(() => {
+    const siteLink = document.querySelector('a[data-item-id*="authority"], a[aria-label*="site"], a[href^="http"]:not([href*="google"]):not([href*="goo.gl"])');
+    if (siteLink) return siteLink.href;
+    // Busca links externos em seção de contato
+    const links = document.querySelectorAll('[data-section-id] a[href^="http"]');
+    for (const link of links) {
+      const h = link.href;
+      if (!h.includes('google.com') && !h.includes('goo.gl') && !h.includes('maps.app')) {
+        return h;
+      }
+    }
+    return null;
+  }).catch(() => null);
+
+  // Rating e reviews
+  const { rating, reviewCount } = await page.evaluate(() => {
+    const ratingEl = document.querySelector('[role="img"][aria-label*="estrela"], [aria-label*="star"]');
+    let rating = 0;
+    if (ratingEl) {
+      const m = (ratingEl.getAttribute('aria-label') || '').match(/(\d[.,]\d)/);
+      if (m) rating = parseFloat(m[1].replace(',', '.'));
+    }
+    let reviewCount = 0;
+    const revBtn = document.querySelector('button[aria-label*="avaliações"], button[aria-label*="reviews"]');
+    if (revBtn) {
+      const m = (revBtn.innerText || '').match(/[\d.,]+/);
+      if (m) reviewCount = parseInt(m[0].replace(/\D/g, ''));
+    }
+    return { rating, reviewCount };
+  }).catch(() => ({ rating: 0, reviewCount: 0 }));
+
+  // Instagram e WhatsApp direto do painel
+  const panelHtml = await page.content();
+  const instagram = extractInstagramFromHtml(panelHtml);
+  const waFromPanel = extractWhatsAppFromHtml(panelHtml);
+  const whatsapp = waFromPanel || normalizePhone(phone) || null;
+
+  return { name, address, phone: normalizePhone(phone), website, instagram, whatsapp, rating, reviewCount };
 }
 
 // ─── Core Scraper ─────────────────────────────────────────────────────────────
@@ -64,6 +174,7 @@ async function scrapeGoogleMaps({ niche, keywords, cities, state, quantity }) {
         '--disable-setuid-sandbox',
         '--disable-blink-features=AutomationControlled',
         '--lang=pt-BR,pt',
+        '--disable-web-security',
       ],
     });
 
@@ -77,213 +188,184 @@ async function scrapeGoogleMaps({ niche, keywords, cities, state, quantity }) {
         locale: 'pt-BR',
         userAgent:
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        extraHTTPHeaders: {
-          'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-        },
+        extraHTTPHeaders: { 'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8' },
       });
 
       const page = await context.newPage();
 
+      // Remove detecção de automação
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      });
+
       try {
-        // Monta query de busca
-        const searchTerm = `${niche} ${keywords.join(' ')} ${city} ${state}`.trim();
-        const encodedSearch = encodeURIComponent(searchTerm);
-        const mapsUrl = `https://www.google.com/maps/search/${encodedSearch}`;
+        const searchTerm = [niche, ...keywords, city, state].filter(Boolean).join(' ');
+        const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchTerm)}`;
+        console.log('[scraper] buscando:', searchTerm);
 
-        console.log('[scraper] abrindo:', mapsUrl);
-        await page.goto(mapsUrl, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.goto(mapsUrl, { waitUntil: 'domcontentloaded', timeout: 40000 });
 
-        // Aguarda lista de resultados
-        await page.waitForSelector('[role="feed"]', { timeout: 15000 }).catch(() => {});
+        // Espera a lista de resultados aparecer
+        const hasFeed = await page.waitForSelector('[role="feed"]', { timeout: 18000 }).then(() => true).catch(() => false);
 
-        // Scroll para carregar mais resultados
-        const feed = await page.$('[role="feed"]');
-        if (feed) {
-          let prevCount = 0;
-          for (let scrollAttempt = 0; scrollAttempt < 6; scrollAttempt++) {
-            const cards = await page.$$('[role="feed"] > div > div[jsaction]');
-            if (cards.length >= perCity * 2) break;
-            if (cards.length === prevCount && scrollAttempt > 1) break;
-            prevCount = cards.length;
-            await feed.evaluate(el => (el.scrollTop += 2500));
-            await page.waitForTimeout(1500);
-          }
+        if (!hasFeed) {
+          console.log('[scraper] feed não encontrado em', city, '— pulando');
+          continue;
         }
 
-        // Pega todos os cards de resultado
-        const cards = await page.$$('[role="feed"] > div > div[jsaction]');
-        console.log(`[scraper] ${city}: ${cards.length} cards encontrados`);
+        // Scroll para carregar mais cards - Aumentado para achar leads sem site que ficam no fundo
+        console.log('[scraper] fazendo scroll profundo para achar leads quentes...');
+        const feed = await page.$('[role="feed"]');
+        let lastCount = 0;
+        for (let i = 0; i < 15; i++) { // Aumentado de 8 para 15
+          const count = await page.$$eval('[role="feed"] [role="article"]', els => els.length).catch(() => 0);
+          if (count >= perCity * 2) break; // Busca o dobro pra ter margem
+          if (count > 0 && count === lastCount && i > 5) break;
+          lastCount = count;
+          if (feed) await feed.evaluate(el => { el.scrollTop += 4000; }); // Aumentado salto de 3000 para 4000
+          await page.waitForTimeout(1000);
+        }
+
+        // Pega todos os articles (cards de resultado)
+        const articleCount = await page.$$eval('[role="feed"] [role="article"]', els => els.length).catch(() => 0);
+        console.log(`[scraper] ${city}: ${articleCount} resultados encontrados`);
 
         let cityLeads = 0;
 
-        for (const card of cards) {
+        for (let idx = 0; idx < articleCount; idx++) {
           if (cityLeads >= perCity || allLeads.length >= quantity) break;
 
           try {
-            // Clica no card para abrir painel de detalhes
-            await card.click();
-            await page.waitForTimeout(1800);
+            // Re-pega os articles (DOM pode ter mudado)
+            const articles = await page.$$('[role="feed"] [role="article"]');
+            if (idx >= articles.length) break;
 
-            // Aguarda painel carregar
-            await page.waitForSelector('h1', { timeout: 6000 }).catch(() => {});
+            const article = articles[idx];
+            
+            // Extrai nome da card antes de clicar (mais confiável)
+            const cardName = await article.evaluate(el => {
+              const nameEl = el.querySelector('.fontHeadlineSmall, .qBF1Pd');
+              return nameEl ? nameEl.innerText.trim() : '';
+            }).catch(() => '');
 
-            // ── Extrai dados básicos ──
+            // Clica no article para abrir painel de detalhe
+            await article.click();
+            await page.waitForTimeout(1200);
 
-            const name = await page.$eval('h1', el => el.innerText.trim()).catch(() => '');
-            if (!name) continue;
+            // Aguarda o painel atualizar de forma OBRIGATÓRIA
+            await page.waitForFunction(
+              (name) => {
+                const h1 = document.querySelector('h1');
+                if (!h1 || !h1.innerText) return false;
+                
+                // Limpa nomes para comparação: remove emojis, pontuação e espaços extras
+                const clean = (str) => str.toLowerCase()
+                  .replace(/[^\w\s]/gi, '') // remove emojis e símbolos
+                  .replace(/\s+/g, ' ')      // normaliza espaços
+                  .trim();
 
-            // Telefone
-            let phone = '';
-            const phoneEl = await page.$('[data-tooltip="Copiar número de telefone"]');
-            if (phoneEl) {
-              phone = await phoneEl.evaluate(el => el.getAttribute('data-item-id') || el.innerText || '').catch(() => '');
-            }
-            // Fallback: busca por aria-label contendo número
-            if (!phone) {
-              const allButtons = await page.$$('button[aria-label]');
-              for (const btn of allButtons) {
-                const label = await btn.getAttribute('aria-label');
-                if (label && /\(\d{2}\)/.test(label)) {
-                  phone = label.replace(/[^\d+]/g, '');
-                  break;
-                }
-              }
-            }
-            // Fallback 2: busca por span com padrão de telefone
-            if (!phone) {
-              const spans = await page.$$eval('span', els =>
-                els.map(e => e.innerText).filter(t => /\(\d{2}\)\s*\d{4,5}-?\d{4}/.test(t))
-              );
-              if (spans.length) phone = spans[0].replace(/[^\d+]/g, '');
-            }
+                const h1Text = clean(h1.innerText);
+                const targetName = clean(name);
+                
+                return h1Text.includes(targetName) || targetName.includes(h1Text);
+              },
+              cardName,
+              { timeout: 10000 } // 10s de margem
+            ).catch((err) => {
+               // Se der timeout, tentamos dar um scroll no card e clicar de novo antes de desistir
+               console.log(`[scraper] tentando re-clicar em "${cardName}"...`);
+               return article.click().then(() => page.waitForTimeout(2000));
+            });
 
-            // Endereço
-            let address = '';
-            const addrEl = await page.$('[data-tooltip="Copiar endereço"]');
-            if (addrEl) {
-              address = await addrEl.evaluate(el => el.innerText || el.getAttribute('aria-label') || '').catch(() => '');
-            }
-            if (!address) {
-              // Busca botão de copiar endereço por aria-label
-              const allBtns = await page.$$('button[aria-label]');
-              for (const btn of allBtns) {
-                const label = await btn.getAttribute('aria-label') || '';
-                if (label.toLowerCase().includes('endereço') || label.toLowerCase().includes('copiar')) {
-                  const possibleAddr = await btn.evaluate(el => el.innerText || '');
-                  if (possibleAddr && possibleAddr.length > 5) {
-                    address = possibleAddr;
-                    break;
-                  }
-                }
-              }
-            }
+            // Agora extrai dados do painel — temos certeza que é o lead correto
+            let lead = await extractLeadFromPanel(page);
 
-            // Site
-            let website = null;
-            const siteBtn = await page.$('a[data-tooltip="Abrir site"][href]');
-            if (siteBtn) {
-              website = await siteBtn.getAttribute('href');
+            // Se não extraiu nome do painel, usa o da card
+            if (!lead && cardName) {
+              lead = {
+                name: cardName,
+                address: `${city}, ${state}`,
+                phone: '',
+                website: null,
+                instagram: null,
+                whatsapp: null,
+                rating: 0,
+                reviewCount: 0,
+              };
             }
-            if (!website) {
-              // Busca links externos no painel
-              const links = await page.$$eval('a[href^="http"]', els =>
-                els
-                  .map(e => e.href)
-                  .filter(h => !h.includes('google.com') && !h.includes('goo.gl') && !h.includes('maps.app'))
-              );
-              if (links.length) website = links[0];
+            if (!lead) {
+              // Fecha painel e continua
+              await page.keyboard.press('Escape');
+              await page.waitForTimeout(500);
+              continue;
             }
 
-            // Rating
-            let rating = 0;
-            let reviewCount = 0;
-            try {
-              const ratingText = await page.$eval('[role="img"][aria-label*="estrela"]', el =>
-                el.getAttribute('aria-label') || ''
-              ).catch(() => '');
-              const ratingMatch = ratingText.match(/(\d[.,]\d)/);
-              if (ratingMatch) rating = parseFloat(ratingMatch[1].replace(',', '.'));
-
-              const reviewText = await page.$eval('button[aria-label*="avaliações"]', el =>
-                el.innerText || ''
-              ).catch(() => '');
-              const reviewMatch = reviewText.match(/[\d.,]+/);
-              if (reviewMatch) reviewCount = parseInt(reviewMatch[0].replace(/\D/g, ''));
-            } catch {/* ignore */}
-
-            // ── Enriquecimento: Instagram e WhatsApp ──
-
-            let instagram = null;
-            let whatsapp = normalizePhone(phone) || null;
-
-            // 1. Verifica se o próprio painel tem links de Instagram/WhatsApp
-            const panelHtml = await page.content();
-            const igFromPanel = extractInstagramFromHtml(panelHtml);
-            if (igFromPanel) instagram = igFromPanel;
-
-            const waFromPanel = extractWhatsAppFromHtml(panelHtml);
-            if (waFromPanel) whatsapp = waFromPanel;
-
-            // 2. Se tem site, tenta enriquecer abrindo o site
-            if (website && (!instagram || !whatsapp)) {
-              const enrichPage = await context.newPage();
-              try {
-                const extra = await enrichFromWebsite(enrichPage, website);
-                if (!instagram && extra.instagram) instagram = extra.instagram;
-                if (!whatsapp && extra.whatsapp) whatsapp = extra.whatsapp;
-              } finally {
-                await enrichPage.close();
+            // Usa cardName se o painel retornou algo genérico
+            if (lead.name === 'Resultados' || lead.name.length <= 1) {
+              if (cardName) lead.name = cardName;
+              else {
+                await page.keyboard.press('Escape');
+                await page.waitForTimeout(500);
+                continue;
               }
             }
 
-            // Se phone é número BR, usa como whatsapp
-            if (!whatsapp && phone) whatsapp = normalizePhone(phone);
+            // Enriquecimento: tenta pegar Instagram/WhatsApp do site (em paralelo, rápido)
+            if (lead.website && (!lead.instagram || !lead.whatsapp)) {
+              const extra = await enrichFromWebsite(context, lead.website);
+              if (!lead.instagram && extra.instagram) lead.instagram = extra.instagram;
+              if (!lead.whatsapp && extra.whatsapp) lead.whatsapp = extra.whatsapp;
+            }
 
-            const lead = {
+            const finalLead = {
               id: `gm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              name,
-              address: address || `${city}, ${state}`,
-              phone: normalizePhone(phone),
-              whatsapp,
-              website,
-              instagram,
-              rating,
-              reviewCount,
-              type: website ? 'cold' : 'hot',
+              name: lead.name,
+              address: lead.address || `${city}, ${state}`,
+              phone: lead.phone || '',
+              whatsapp: lead.whatsapp || lead.phone || null,
+              website: lead.website,
+              instagram: lead.instagram,
+              rating: lead.rating || 0,
+              reviewCount: lead.reviewCount || 0,
+              type: lead.website ? 'cold' : 'hot',
               niche,
               city,
               state,
               foundAt: new Date().toISOString(),
             };
 
-            console.log(`[scraper] lead: ${name} | tel: ${phone} | ig: ${instagram} | wa: ${whatsapp} | site: ${website}`);
-            allLeads.push(lead);
+            console.log(`[✓] ${finalLead.name} | tel: ${finalLead.phone} | ig: ${finalLead.instagram} | wa: ${finalLead.whatsapp}`);
+            allLeads.push(finalLead);
             cityLeads++;
 
-            // Volta para a lista
-            await page.goBack({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
-            await page.waitForTimeout(800);
+            // Fecha painel: pressiona Escape ou botão de fechar
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(300);
+
+            // Garante que a lista volta a aparecer
+            await page.waitForSelector('[role="feed"]', { timeout: 5000 }).catch(() => { });
 
           } catch (err) {
-            console.warn('[scraper] erro no card:', err.message);
-            // Tenta voltar mesmo em caso de erro
-            await page.goBack({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
+            console.warn(`[scraper] erro no card ${idx}:`, err.message?.slice(0, 80));
+            await page.keyboard.press('Escape').catch(() => { });
             await page.waitForTimeout(500);
           }
         }
 
+        console.log(`[scraper] ${city}: ${cityLeads} leads extraídos`);
+
       } catch (err) {
-        console.error(`[scraper] erro na cidade ${city}:`, err.message);
+        console.error(`[scraper] erro na cidade ${city}:`, err.message?.slice(0, 100));
       } finally {
-        await page.close().catch(() => {});
-        await context.close().catch(() => {});
+        await page.close().catch(() => { });
+        await context.close().catch(() => { });
       }
     }
 
     return allLeads;
 
   } finally {
-    if (browser) await browser.close().catch(() => {});
+    if (browser) await browser.close().catch(() => { });
   }
 }
 
@@ -296,8 +378,10 @@ app.post('/api/scrape-leads', async (req, res) => {
     return res.status(400).json({ error: 'niche e cities são obrigatórios', leads: [] });
   }
 
+  const qty = Math.min(parseInt(quantity) || 20, 200); // max 200
+
   try {
-    const leads = await scrapeGoogleMaps({ niche, keywords, cities, state, quantity });
+    const leads = await scrapeGoogleMaps({ niche, keywords, cities, state, quantity: qty });
     return res.json({ leads, total: leads.length });
   } catch (err) {
     console.error('[api] erro:', err);
@@ -307,8 +391,18 @@ app.post('/api/scrape-leads', async (req, res) => {
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n🚀 Scraper server rodando em http://localhost:${PORT}`);
   console.log(`   POST /api/scrape-leads  — busca leads no Google Maps`);
   console.log(`   GET  /api/health        — verifica status\n`);
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`\n⚠️  Porta ${PORT} já em uso — servidor já está rodando!\n`);
+    process.exit(0);
+  } else {
+    console.error('Erro no servidor:', err);
+    process.exit(1);
+  }
 });

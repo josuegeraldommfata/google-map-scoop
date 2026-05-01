@@ -15,6 +15,42 @@ interface Props {
 
 const PAGE_SIZE = 10;
 
+// ─── Especialidades jurídicas ─────────────────────────────────────────────────
+
+const LEGAL_NICHES = ['advogado', 'advocacia', 'advogados', 'juridico', 'jurídico', 'direito', 'lawyer'];
+
+const LEGAL_SPECIALTIES: { keywords: string[]; label: string; color: string }[] = [
+  { keywords: ['previdenciári', 'previdenci', 'inss', 'aposentadori'], label: 'Previdenciário', color: 'bg-purple-500/15 text-purple-400 border-purple-500/30' },
+  { keywords: ['trabalhist', 'trabalhador', 'clt', 'empregado', 'demissão'], label: 'Trabalhista', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+  { keywords: ['criminal', 'penal', 'crime', 'defesa criminal'], label: 'Criminal', color: 'bg-red-500/15 text-red-400 border-red-500/30' },
+  { keywords: ['família', 'familia', 'divórcio', 'divorcio', 'guarda', 'aliment', 'herança', 'inventári'], label: 'Família', color: 'bg-pink-500/15 text-pink-400 border-pink-500/30' },
+  { keywords: ['civil', 'cível', 'civel', 'contrato', 'indeniz'], label: 'Civil', color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30' },
+  { keywords: ['imobiliári', 'imóveis', 'imoveis', 'locação', 'locacao', 'condomíni'], label: 'Imobiliário', color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  { keywords: ['tributári', 'tributario', 'fiscal', 'imposto', 'tax'], label: 'Tributário', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+  { keywords: ['empresarial', 'empresa', 'societári', 'sociedade', 'startup'], label: 'Empresarial', color: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
+  { keywords: ['consumidor', 'cdc', 'recall', 'fornecedor'], label: 'Consumidor', color: 'bg-teal-500/15 text-teal-400 border-teal-500/30' },
+  { keywords: ['digital', 'tecnologia', 'lgpd', 'dados', 'internet'], label: 'Digital', color: 'bg-violet-500/15 text-violet-400 border-violet-500/30' },
+  { keywords: ['ambiental', 'meio ambiente', 'agro', 'rural'], label: 'Ambiental', color: 'bg-green-500/15 text-green-400 border-green-500/30' },
+  { keywords: ['médico', 'medico', 'saúde', 'hospital', 'erro médico'], label: 'Médico', color: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
+];
+
+function extractLegalSpecialties(name: string, niche: string): { label: string; color: string }[] {
+  const nicheL = niche.toLowerCase();
+  const isLegal = LEGAL_NICHES.some(n => nicheL.includes(n));
+  if (!isLegal) return [];
+
+  const nameL = name.toLowerCase();
+  const found: { label: string; color: string }[] = [];
+
+  for (const spec of LEGAL_SPECIALTIES) {
+    if (spec.keywords.some(kw => nameL.includes(kw))) {
+      found.push({ label: spec.label, color: spec.color });
+      if (found.length >= 3) break; // máximo 3 badges
+    }
+  }
+  return found;
+}
+
 export function LeadsTable({ leads }: Props) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<'all' | 'hot' | 'cold'>('all');
@@ -115,6 +151,23 @@ export function LeadsTable({ leads }: Props) {
                 <td className="p-3">
                   <p className="font-medium text-foreground">{lead.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{lead.niche} • {lead.city}</p>
+                  {/* Especialidades jurídicas */}
+                  {(() => {
+                    const specs = extractLegalSpecialties(lead.name, lead.niche);
+                    if (!specs.length) return null;
+                    return (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {specs.map(s => (
+                          <span
+                            key={s.label}
+                            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${s.color}`}
+                          >
+                            {s.label}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="p-3 hidden lg:table-cell">
                   <p className="text-xs text-muted-foreground max-w-xs truncate">{lead.address}</p>
