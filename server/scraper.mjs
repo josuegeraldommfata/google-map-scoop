@@ -10,21 +10,22 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Middleware de CORS "Força Bruta" - Injeta em todas as rotas
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  // Responde imediatamente a requisições de preflight (OPTIONS)
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  next();
-});
+// Configuração de CORS Estável e Automática
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use(express.json());
+
+// Anti-Crash: Captura erros globais para o servidor não cair nunca
+process.on('uncaughtException', (err) => {
+  console.error('[ERRO FATAL] Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[ERRO FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 // Sistema de Logs em Tempo Real (SSE)
 let logClients = [];
