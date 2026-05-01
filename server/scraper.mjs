@@ -17,11 +17,43 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const PORT = process.env.PORT || 3001;
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+
+app.post('/api/scrape-leads', async (req, res) => {
+  const { niche, keywords = [], cities = [], state = 'SP', quantity = 20 } = req.body;
+  console.log(`[api] busca recebida: ${niche} em ${cities.join(', ')}`);
+
+  if (!niche || !cities.length) {
+    return res.status(400).json({ error: 'niche e cities são obrigatórios', leads: [] });
+  }
+
+  const qty = Math.min(parseInt(quantity) || 20, 200);
+
+  try {
+    const leads = await scrapeGoogleMaps({ niche, keywords, cities, state, quantity: qty });
+    return res.json({ leads, total: leads.length });
+  } catch (err) {
+    console.error('[api] erro:', err);
+    return res.status(500).json({ error: String(err), leads: [] });
+  }
+});
+
 // Servir arquivos estáticos do Vite (em produção)
 const distPath = path.join(__dirname, '../dist');
+console.log(`[server] servindo frontend de: ${distPath}`);
 app.use(express.static(distPath));
 
-const PORT = process.env.PORT || 3001;
+// Middleware para SPA (Vite) — Redireciona qualquer rota que não seja da API para o index.html
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api')) {
+    return res.sendFile(path.join(distPath, 'index.html'));
+  }
+  next();
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -380,38 +412,10 @@ async function scrapeGoogleMaps({ niche, keywords, cities, state, quantity }) {
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
-app.post('/api/scrape-leads', async (req, res) => {
-  const { niche, keywords = [], cities = [], state = 'SP', quantity = 20 } = req.body;
-
-  if (!niche || !cities.length) {
-    return res.status(400).json({ error: 'niche e cities são obrigatórios', leads: [] });
-  }
-
-  const qty = Math.min(parseInt(quantity) || 20, 200); // max 200
-
-  try {
-    const leads = await scrapeGoogleMaps({ niche, keywords, cities, state, quantity: qty });
-    return res.json({ leads, total: leads.length });
-  } catch (err) {
-    console.error('[api] erro:', err);
-    return res.status(500).json({ error: String(err), leads: [] });
-  }
-});
-
-app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
-
-// Middleware para SPA (Vite) — Redireciona qualquer rota que não seja da API para o index.html
-app.use((req, res, next) => {
-  if (req.method === 'GET' && !req.path.startsWith('/api')) {
-    return res.sendFile(path.join(distPath, 'index.html'));
-  }
-  next();
-});
-
 const server = app.listen(PORT, () => {
-  console.log(`\n🚀 Scraper server rodando em http://localhost:${PORT}`);
-  console.log(`   POST /api/scrape-leads  — busca leads no Google Maps`);
-  console.log(`   GET  /api/health        — verifica status\n`);
+  console.log(`\n🚀 Scraper server rodando na porta ${PORT}`);
+  console.log(`   API: /api/scrape-leads`);
+  console.log(`   Frontend: servindo pasta dist\n`);
 });
 
 server.on('error', (err) => {
