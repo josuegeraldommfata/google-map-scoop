@@ -14,7 +14,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(cors({ origin: '*', methods: ['GET', 'POST'], allowedHeaders: ['Content-Type'] }));
+// CORS super robusto para aceitar tudo do Vercel
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
 app.use(express.json());
 
 // Sistema de Logs em Tempo Real (SSE)
@@ -385,6 +392,14 @@ async function scrapeGoogleMaps({ niche, keywords, cities, state, quantity }) {
               const extra = await enrichFromWebsite(context, lead.website);
               if (!lead.instagram && extra.instagram) lead.instagram = extra.instagram;
               if (!lead.whatsapp && extra.whatsapp) lead.whatsapp = extra.whatsapp;
+            }
+
+            // Se não tem site, tenta gerar WhatsApp pelo telefone
+            if (!lead.website && lead.phone) {
+              const cleanPhone = lead.phone.replace(/\D/g, '');
+              if (cleanPhone.length >= 10) {
+                lead.whatsapp = `https://wa.me/${cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone}`;
+              }
             }
 
             const finalLead = {
