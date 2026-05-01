@@ -7,10 +7,19 @@
 import express from 'express';
 import cors from 'cors';
 import { chromium } from 'playwright';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Servir arquivos estáticos do Vite (em produção)
+const distPath = path.join(__dirname, '../dist');
+app.use(express.static(distPath));
 
 const PORT = 3001;
 
@@ -390,6 +399,11 @@ app.post('/api/scrape-leads', async (req, res) => {
 });
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+
+// Rota curinga para SPA (Vite) — deve vir DEPOIS das rotas de API
+app.get('*', (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
+});
 
 const server = app.listen(PORT, () => {
   console.log(`\n🚀 Scraper server rodando em http://localhost:${PORT}`);
