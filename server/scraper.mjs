@@ -401,7 +401,7 @@ app.post('/api/scrape-leads', async (req, res) => {
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
 // Rota curinga para SPA (Vite) — deve vir DEPOIS das rotas de API
-app.get('*', (req, res) => {
+app.get('(.*)', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
