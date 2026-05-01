@@ -5,7 +5,6 @@ import { LeadsTable } from "@/components/LeadsTable";
 import { SearchHistoryPanel } from "@/components/SearchHistoryPanel";
 import { Lead, SearchQuery, SearchHistory } from "@/types/lead";
 import { Crosshair, Zap } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export default function Index() {
@@ -19,16 +18,24 @@ export default function Index() {
   const handleSearch = useCallback(async (query: SearchQuery) => {
     setIsSearching(true);
     try {
-      const { data, error } = await supabase.functions.invoke('scrape-leads', {
-        body: query,
+      const res = await fetch('/api/scrape-leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(query),
       });
-      if (error) throw error;
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
       const newLeads: Lead[] = (data?.leads || []) as Lead[];
 
       if (newLeads.length === 0) {
         toast.warning('Nenhum lead encontrado. Tente outro nicho ou cidade.');
       } else {
-        toast.success(`${newLeads.length} leads capturados!`);
+        toast.success(`${newLeads.length} leads capturados com dados do Google Maps!`);
       }
 
       setLeads(prev => {
@@ -48,9 +55,13 @@ export default function Index() {
         coldLeads: cold,
         executedAt: new Date().toISOString(),
       }, ...prev]);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Erro na busca:', e);
-      toast.error('Erro ao buscar leads. Tente novamente.');
+      if (e?.message?.includes('fetch') || e?.message?.includes('Failed')) {
+        toast.error('Servidor scraper offline. Inicie com: node server/scraper.mjs');
+      } else {
+        toast.error(`Erro: ${e?.message || 'Tente novamente'}`);
+      }
     } finally {
       setIsSearching(false);
     }
