@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "node server/scraper.mjs",
     "server": "node server/scraper.mjs",
     "build": "vite build",
     "build:dev": "vite build --mode development",
