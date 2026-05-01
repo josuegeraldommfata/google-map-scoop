@@ -26,7 +26,11 @@ export default function Index() {
 
   // Conexão de Logs em tempo real
   useEffect(() => {
-    const eventSource = new EventSource('/api/logs');
+    const LOG_URL = window.location.hostname.includes('vercel.app') 
+      ? 'https://google-map-scoop.onrender.com/api/logs' 
+      : '/api/logs';
+
+    const eventSource = new EventSource(LOG_URL);
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       setLogs(prev => [...prev.slice(-49), data]); // Mantém os últimos 50
@@ -34,11 +38,16 @@ export default function Index() {
     return () => eventSource.close();
   }, []);
 
+  // Detecta se está no Vercel para usar a URL da Render, senão usa local
+  const API_URL = window.location.hostname.includes('vercel.app') 
+    ? 'https://google-map-scoop.onrender.com' 
+    : '';
+
   const handleSearch = useCallback(async (query: SearchQuery) => {
     setIsSearching(true);
     setLogs([]); // Limpa logs para nova busca
     try {
-      const res = await fetch('/api/scrape-leads', {
+      const res = await fetch(`${API_URL}/api/scrape-leads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(query),
