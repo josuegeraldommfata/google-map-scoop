@@ -69,12 +69,22 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
   console.log(`[scraper] iniciando prospecção: ${searchTerm}`);
 
   const url = `https://www.google.com/maps/search/${encodeURIComponent(searchTerm)}`;
-  await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
+  // Espera qualquer sinal de vida (lista ou painel direto)
   try {
-    await page.waitForSelector('.m6u5nf, .Nv2Y3c', { timeout: 15000 });
+    await page.waitForSelector('.Nv2Y3c, .m6u5nf, h1.DUwDvf, [role="article"]', { timeout: 20000 });
   } catch (e) {
-    console.log('[scraper] aviso: carregamento lento de resultados...');
+    console.log('[scraper] aviso: a página demorou muito para mostrar resultados.');
+  }
+
+  // Verifica se caiu direto em um único resultado
+  const isSingleResult = await page.evaluate(() => !!document.querySelector('h1.DUwDvf') && !document.querySelector('.Nv2Y3c'));
+  
+  if (isSingleResult) {
+    console.log('[scraper] busca retornou um resultado único direto.');
+    // Extrai esse único lead e retorna
+    // (A lógica abaixo já vai lidar com isso se a gente tratar os cards de forma flexível)
   }
 
   let results = [];
@@ -82,7 +92,8 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
   let consecutiveEmptyCycles = 0;
 
   while (results.length < limit && consecutiveEmptyCycles < 10) {
-    const cards = await page.$$('.Nv2Y3c, .Ua6K6, .jVST6d');
+    // Seletores super abrangentes
+    const cards = await page.$$('.Nv2Y3c, .Ua6K6, .jVST6d, [role="article"], a.hfpxzc');
     let newFoundInBatch = false;
 
     for (const card of cards) {
