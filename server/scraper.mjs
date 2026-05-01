@@ -10,8 +10,8 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// CORS GLOBAL ABSOLUTO (Pega tudo antes das rotas)
-app.all('*', (req, res, next) => {
+// CORS GLOBAL ABSOLUTO (Compatível com Express 5)
+app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
