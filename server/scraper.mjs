@@ -117,34 +117,42 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
         console.log(`[scraper] analisando: "${name}"...`);
         await card.click();
         
-        // Sincronização Panel Title - Muito mais rápida agora
+        // Sincronização Panel - Espera o painel "acordar" com dados reais
         try {
           await page.waitForFunction((expectedName) => {
-            const panelTitle = document.querySelector('h1.DUwDvf')?.textContent || '';
-            const allText = document.body.innerText;
-            const normalize = s => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-            return normalize(panelTitle).includes(normalize(expectedName)) || allText.includes(expectedName);
-          }, { timeout: 3000 }, name);
-        } catch (e) { /* ignore and move fast */ }
+            const panel = document.querySelector('h1.DUwDvf');
+            const hasInfo = !!document.querySelector('button[data-item-id="address"]') || !!document.querySelector('button[data-item-id^="phone:tel:"]');
+            return panel?.textContent?.length > 1 && hasInfo;
+          }, { timeout: 4000 });
+        } catch (e) {
+          console.log(`[scraper] painel lento para "${name}", tentando reforçar o clique...`);
+          await card.click(); // Re-clique de segurança
+          await new Promise(r => setTimeout(r, 1500));
+        }
 
         const data = await page.evaluate(() => {
           const getLink = (selector) => document.querySelector(selector)?.getAttribute('href');
           
-          // Tenta achar o site de várias formas
+          // Site Detection
           const website = getLink('a[data-item-id="authority"]') || 
                           getLink('a[aria-label^="Website"]') || 
                           getLink('a[aria-label^="Sítio"]') ||
                           Array.from(document.querySelectorAll('a')).find(a => a.href && !a.href.includes('google.com') && a.innerText.toLowerCase().includes('.'))?.href;
           
           let phone = null;
-          // Busca o telefone pelo atributo de ID ou pelo padrão de texto brasileiro
+          // Busca telefone por múltiplos caminhos
           const phoneBtn = document.querySelector('button[data-item-id^="phone:tel:"]');
           if (phoneBtn) {
             phone = phoneBtn.getAttribute('data-item-id').replace('phone:tel:', '');
           } else {
-            const allElements = Array.from(document.querySelectorAll('.Io6YTe, .fontBodyMedium'));
-            const phoneEl = allElements.find(el => el.textContent.match(/\(\d{2}\)\s\d/));
-            if (phoneEl) phone = phoneEl.textContent;
+            // Tenta achar qualquer botão que tenha ícone de telefone
+            const phoneByIcon = Array.from(document.querySelectorAll('button')).find(btn => btn.querySelector('img[src*="phone"]'));
+            if (phoneByIcon) phone = phoneByIcon.textContent.trim();
+            else {
+              const allText = document.body.innerText;
+              const matches = allText.match(/\(\d{2}\)\s\d{4,5}-\d{4}/);
+              if (matches) phone = matches[0];
+            }
           }
 
           const address = document.querySelector('button[data-item-id="address"]')?.textContent?.trim() || 
