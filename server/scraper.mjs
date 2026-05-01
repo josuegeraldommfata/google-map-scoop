@@ -21,7 +21,7 @@ app.use(express.json());
 const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
