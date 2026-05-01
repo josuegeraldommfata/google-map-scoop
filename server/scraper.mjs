@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { chromium } from 'playwright-extra';
-import stealth from 'playwright-extra-plugin-stealth';
+import stealth from 'puppeteer-extra-plugin-stealth';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
