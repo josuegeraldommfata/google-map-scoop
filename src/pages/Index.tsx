@@ -27,7 +27,7 @@ export default function Index() {
   // Conexão de Logs em tempo real
   useEffect(() => {
     const LOG_URL = window.location.hostname.includes('vercel.app') 
-      ? 'https://google-map-scoop.onrender.com/api/logs' 
+      ? 'https://google-map-scoop-1.onrender.com/api/logs' 
       : '/api/logs';
 
     const eventSource = new EventSource(LOG_URL);
@@ -40,7 +40,7 @@ export default function Index() {
 
   // Detecta se está no Vercel para usar a URL da Render, senão usa local
   const API_URL = window.location.hostname.includes('vercel.app') 
-    ? 'https://google-map-scoop.onrender.com' 
+    ? 'https://google-map-scoop-1.onrender.com' 
     : '';
 
   const handleSearch = useCallback(async (query: SearchQuery) => {
