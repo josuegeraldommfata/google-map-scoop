@@ -10,12 +10,24 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Configuração de CORS Estável e Automática
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// 1. Log de todas as requisições (ajuda a ver no Render se a mensagem chegou)
+app.use((req, res, next) => {
+  console.log(`[HTTP] ${req.method} ${req.url}`);
+  next();
+});
+
+// 2. CORS Híbrido (Manual + Biblioteca) - A prova de falhas
+app.use(cors({ origin: '*', credentials: true })); // Biblioteca
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).send();
+  }
+  next();
+});
 
 app.use(express.json());
 
