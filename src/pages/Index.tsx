@@ -40,13 +40,20 @@ export default function Index() {
 
   const handleSearch = useCallback(async (query: SearchQuery) => {
     setIsSearching(true);
-    setLogs([]); // Limpa logs para nova busca
+    setLogs([]);
     try {
+      // Timeout de 20 minutos para não cancelar o scraping
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20 * 60 * 1000);
+
       const res = await fetch(`${API_URL}/api/scrape-leads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(query),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
