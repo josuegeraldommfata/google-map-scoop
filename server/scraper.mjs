@@ -11,7 +11,7 @@ const app = express();
 
 // Configuração Robusta de CORS
 app.use(cors({
-  origin: ['https://google-map-scoop.vercel.app', 'http://localhost:5173', 'http://localhost:3000'],
+  origin: true, // Permite qualquer origem
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
   credentials: false,
@@ -20,13 +20,7 @@ app.use(cors({
 
 // Middleware adicional para garantir CORS em todas as rotas
 app.use((req, res, next) => {
-  const allowedOrigins = ['https://google-map-scoop.vercel.app', 'http://localhost:5173', 'http://localhost:3000'];
-  const origin = req.headers.origin;
-  
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-  
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.setHeader('Access-Control-Max-Age', '86400');
