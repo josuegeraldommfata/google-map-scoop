@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { chromium } from 'playwright-extra';
-import stealth from 'puppeteer-extra-plugin-stealth';
+import { chromium } from 'playwright';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -68,8 +67,6 @@ console.log = (...args) => {
 const PORT = process.env.PORT || 3001;
 
 // ─── Scraper Engine ───────────────────────────────────────────────────────────
-
-chromium.use(stealth());
 
 async function enrichFromWebsite(url) {
   let browser;
