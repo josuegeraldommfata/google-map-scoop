@@ -2,7 +2,7 @@ services:
   - type: web
     name: google-map-scoop-api
     env: node
-    buildCommand: npm install
+    buildCommand: npm install --production=false
     startCommand: npm run server
     envVars:
       - key: NODE_ENV
