@@ -221,7 +221,7 @@ app.get('/api/logs', (req, res) => {
 });
 
 app.post('/api/scrape-leads', async (req, res) => {
-  // Headers CORS obrigatórios
+  // Headers CORS obrigatórios IMEDIATAMENTE
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -229,7 +229,7 @@ app.post('/api/scrape-leads', async (req, res) => {
   const { niche, cities = [], state = 'SP', quantity = 20 } = req.body;
   
   // Limita quantidade para evitar timeout
-  const maxQuantity = Math.min(quantity, 300); // Aumentado para 300
+  const maxQuantity = Math.min(quantity, 100); // Reduzido de 300 para 100
   
   console.log(`[api] requisição: ${niche} em ${cities.join(', ')} (Qtd: ${maxQuantity})`);
 
@@ -238,9 +238,9 @@ app.post('/api/scrape-leads', async (req, res) => {
     console.log('[api] timeout - encerrando requisição');
     if (browser) browser.close();
     if (!res.headersSent) {
-      res.status(408).json({ error: 'Timeout - tente com menos contatos' });
+      res.status(408).json({ error: 'Timeout - tente com menos contatos (máx 50)' });
     }
-  }, 300000); // 5 minutos timeout (aumentado de 2 para 5)
+  }, 180000); // 3 minutos timeout (reduzido de 5 para 3)
 
   try {
     browser = await chromium.launch({ 
