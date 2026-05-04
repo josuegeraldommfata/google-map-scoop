@@ -7,23 +7,23 @@
 
 @layer base {
   :root {
-    --background: 220 20% 7%;
-    --foreground: 210 20% 92%;
+    --background: 0 0% 98%;
+    --foreground: 220 20% 15%;
 
-    --card: 220 18% 10%;
-    --card-foreground: 210 20% 92%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 15%;
 
-    --popover: 220 18% 12%;
-    --popover-foreground: 210 20% 92%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 15%;
 
     --primary: 25 95% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 16% 16%;
-    --secondary-foreground: 210 20% 85%;
+    --secondary: 220 16% 92%;
+    --secondary-foreground: 220 20% 20%;
 
-    --muted: 220 14% 14%;
-    --muted-foreground: 215 12% 50%;
+    --muted: 220 14% 95%;
+    --muted-foreground: 215 12% 45%;
 
     --accent: 210 80% 55%;
     --accent-foreground: 0 0% 100%;
@@ -31,34 +31,34 @@
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 14% 18%;
-    --input: 220 14% 18%;
+    --border: 220 14% 88%;
+    --input: 220 14% 92%;
     --ring: 25 95% 55%;
 
     --radius: 0.75rem;
 
     --hot: 25 95% 55%;
     --hot-foreground: 0 0% 100%;
-    --hot-muted: 25 60% 15%;
+    --hot-muted: 25 60% 95%;
 
     --cold: 210 80% 55%;
     --cold-foreground: 0 0% 100%;
-    --cold-muted: 210 50% 15%;
+    --cold-muted: 210 50% 95%;
 
     --success: 145 63% 42%;
-    --success-muted: 145 40% 12%;
+    --success-muted: 145 40% 95%;
 
-    --surface-1: 220 18% 10%;
-    --surface-2: 220 16% 13%;
-    --surface-3: 220 14% 16%;
+    --surface-1: 0 0% 100%;
+    --surface-2: 220 16% 97%;
+    --surface-3: 220 14% 94%;
 
-    --sidebar-background: 220 20% 7%;
-    --sidebar-foreground: 210 20% 92%;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 220 20% 15%;
     --sidebar-primary: 25 95% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 16% 16%;
-    --sidebar-accent-foreground: 210 20% 85%;
-    --sidebar-border: 220 14% 18%;
+    --sidebar-accent: 220 16% 92%;
+    --sidebar-accent-foreground: 220 20% 20%;
+    --sidebar-border: 220 14% 88%;
     --sidebar-ring: 25 95% 55%;
 
     --font-heading: 'Space Grotesk', sans-serif;
