@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "start": "node server/scraper.mjs",
-    "server": "node server/scraper.mjs",
+    "start": "node server/scraper-fast.mjs",
+    "server": "node server/scraper-fast.mjs",
     "build": "vite build",
     "build:render": "npm install",
     "build:dev": "vite build --mode development",
