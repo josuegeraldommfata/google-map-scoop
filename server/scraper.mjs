@@ -112,14 +112,13 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
         console.log(`[scraper] analisando: "${name}"...`);
         await card.click();
         
-        // Sincronização Panel - ULTRA RÁPIDA
+        // Sincronização Panel - INSTANTÂNEA
         try {
           await page.waitForFunction(() => {
-            const panel = document.querySelector('h1.DUwDvf');
-            return panel?.textContent?.length > 1;
-          }, { timeout: 500 }); // Reduzido de 1000ms para 500ms
+            return !!document.querySelector('h1.DUwDvf');
+          }, { timeout: 300 }); // Reduzido de 500ms para 300ms
         } catch (e) {
-          // Pula se demorar muito
+          // Pula se demorar
           continue;
         }
 
@@ -193,9 +192,9 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
       consecutiveEmptyCycles++;
       await page.evaluate(() => {
         const feed = document.querySelector('div[role="feed"]');
-        if (feed) feed.scrollTop += 2000; // Scroll SUPER agressivo
+        if (feed) feed.scrollTop += 2500; // Scroll ULTRA agressivo
       });
-      await new Promise(r => setTimeout(r, 300)); // Reduzido de 500ms para 300ms
+      await new Promise(r => setTimeout(r, 150)); // Reduzido de 300ms para 150ms
     }
   }
 
@@ -205,8 +204,15 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
 // ─── API Routes ──────────────────────────────────────────────────────────────
 
 app.get('/api/health', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.post('/api/test', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.json({ message: 'CORS funcionando!', body: req.body });
 });
 
 app.get('/api/logs', (req, res) => {
@@ -240,7 +246,7 @@ app.post('/api/scrape-leads', async (req, res) => {
     if (!res.headersSent) {
       res.status(408).json({ error: 'Timeout - servidor demorou muito' });
     }
-  }, 600000); // 10 minutos timeout
+  }, 900000); // 15 minutos timeout (aumentado de 10 para 15)
 
   try {
     browser = await chromium.launch({ 
