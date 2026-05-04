@@ -239,7 +239,7 @@ app.get('/api/logs', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
   res.flushHeaders();
   logClients.push(res);
@@ -247,16 +247,31 @@ app.get('/api/logs', (req, res) => {
 });
 
 app.post('/api/scrape-leads', async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  // Headers CORS obrigatórios
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   const { niche, cities = [], state = 'SP', quantity = 20 } = req.body;
-  console.log(`[api] requisição: ${niche} em ${cities.join(', ')} (Qtd: ${quantity})`);
+  
+  // Limita quantidade para evitar timeout
+  const maxQuantity = Math.min(quantity, 50); // Máximo 50 por requisição
+  
+  console.log(`[api] requisição: ${niche} em ${cities.join(', ')} (Qtd: ${maxQuantity})`);
 
   let browser;
+  const timeout = setTimeout(() => {
+    console.log('[api] timeout - encerrando requisição');
+    if (browser) browser.close();
+    if (!res.headersSent) {
+      res.status(408).json({ error: 'Timeout - tente com menos contatos' });
+    }
+  }, 120000); // 2 minutos timeout
+
   try {
     browser = await chromium.launch({ 
       headless: true, 
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] 
     });
     
     const context = await browser.newContext({
@@ -267,16 +282,29 @@ app.post('/api/scrape-leads', async (req, res) => {
     let allLeads = [];
 
     for (const city of cities) {
-      const leads = await scrapeGoogleMaps(page, { niche, city, state }, quantity);
+      if (allLeads.length >= maxQuantity) break;
+      const leads = await scrapeGoogleMaps(page, { niche, city, state }, maxQuantity - allLeads.length);
       allLeads = [...allLeads, ...leads];
     }
 
-    res.json({ leads: allLeads });
+    clearTimeout(timeout);
+    if (!res.headersSent) {
+      res.json({ leads: allLeads });
+    }
   } catch (error) {
     console.error('[api] erro fatal:', error);
-    res.status(500).json({ error: error.message });
+    clearTimeout(timeout);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    }
   } finally {
-    if (browser) await browser.close();
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        console.log('[api] erro ao fechar browser:', e.message);
+      }
+    }
   }
 });
 
