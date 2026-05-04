@@ -93,7 +93,7 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
   const processedNames = new Set();
   let consecutiveEmptyCycles = 0;
 
-  while (results.length < limit && consecutiveEmptyCycles < 5) { // Reduzido de 10 para 5
+  while (results.length < limit && consecutiveEmptyCycles < 8) { // Aumentado de 5 para 8
     // Seletores super abrangentes
     const cards = await page.$$('.Nv2Y3c, .Ua6K6, .jVST6d, [role="article"], a.hfpxzc');
     let newFoundInBatch = false;
@@ -112,12 +112,12 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
         console.log(`[scraper] analisando: "${name}"...`);
         await card.click();
         
-        // Sincronização Panel - SUPER RÁPIDA
+        // Sincronização Panel - ULTRA RÁPIDA
         try {
           await page.waitForFunction(() => {
             const panel = document.querySelector('h1.DUwDvf');
             return panel?.textContent?.length > 1;
-          }, { timeout: 1000 }); // Reduzido de 2000ms para 1000ms
+          }, { timeout: 500 }); // Reduzido de 1000ms para 500ms
         } catch (e) {
           // Pula se demorar muito
           continue;
@@ -182,7 +182,7 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
 
         results.push(finalLead);
         console.log(`[✓] ${results.length}/${limit}: ${finalLead.name} (${finalLead.type.toUpperCase()})`);
-        await new Promise(r => setTimeout(r, 100)); // Reduzido de 200ms para 100ms
+        // SEM DELAY - máxima velocidade
 
       } catch (err) {
         console.log(`[scraper] erro em card: ${err.message}`);
@@ -193,9 +193,9 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
       consecutiveEmptyCycles++;
       await page.evaluate(() => {
         const feed = document.querySelector('div[role="feed"]');
-        if (feed) feed.scrollTop += 1500; // Scroll ainda mais agressivo
+        if (feed) feed.scrollTop += 2000; // Scroll SUPER agressivo
       });
-      await new Promise(r => setTimeout(r, 500)); // Reduzido de 800ms para 500ms
+      await new Promise(r => setTimeout(r, 300)); // Reduzido de 500ms para 300ms
     }
   }
 
@@ -229,7 +229,7 @@ app.post('/api/scrape-leads', async (req, res) => {
   const { niche, cities = [], state = 'SP', quantity = 20 } = req.body;
   
   // Limita quantidade para evitar timeout
-  const maxQuantity = Math.min(quantity, 100); // Reduzido de 300 para 100
+  const maxQuantity = Math.min(quantity, 500); // Aumentado para 500
   
   console.log(`[api] requisição: ${niche} em ${cities.join(', ')} (Qtd: ${maxQuantity})`);
 
@@ -238,9 +238,9 @@ app.post('/api/scrape-leads', async (req, res) => {
     console.log('[api] timeout - encerrando requisição');
     if (browser) browser.close();
     if (!res.headersSent) {
-      res.status(408).json({ error: 'Timeout - tente com menos contatos (máx 50)' });
+      res.status(408).json({ error: 'Timeout - servidor demorou muito' });
     }
-  }, 180000); // 3 minutos timeout (reduzido de 5 para 3)
+  }, 600000); // 10 minutos timeout
 
   try {
     browser = await chromium.launch({ 
