@@ -10,14 +10,33 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// CORS GLOBAL ABSOLUTO (Compatível com Express 5)
+// Configuração Robusta de CORS
+app.use(cors({
+  origin: ['https://google-map-scoop.vercel.app', 'http://localhost:5173', 'http://localhost:3000'],
+  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+  credentials: false,
+  optionsSuccessStatus: 200
+}));
+
+// Middleware adicional para garantir CORS em todas as rotas
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  const allowedOrigins = ['https://google-map-scoop.vercel.app', 'http://localhost:5173', 'http://localhost:3000'];
+  const origin = req.headers.origin;
+  
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
   }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
   next();
 });
 
@@ -220,18 +239,25 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
 
 // ─── API Routes ──────────────────────────────────────────────────────────────
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/api/health', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 app.get('/api/logs', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
   res.flushHeaders();
   logClients.push(res);
   req.on('close', () => { logClients = logClients.filter(c => c !== res); });
 });
 
 app.post('/api/scrape-leads', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  
   const { niche, cities = [], state = 'SP', quantity = 20 } = req.body;
   console.log(`[api] requisição: ${niche} em ${cities.join(', ')} (Qtd: ${quantity})`);
 
