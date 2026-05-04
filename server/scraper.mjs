@@ -71,11 +71,11 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
   console.log(`[scraper] iniciando prospecção: ${searchTerm}`);
 
   const url = `https://www.google.com/maps/search/${encodeURIComponent(searchTerm)}`;
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }); // Reduzido de 60s para 30s
 
   // Espera qualquer sinal de vida (lista ou painel direto)
   try {
-    await page.waitForSelector('.Nv2Y3c, .m6u5nf, h1.DUwDvf, [role="article"]', { timeout: 20000 });
+    await page.waitForSelector('.Nv2Y3c, .m6u5nf, h1.DUwDvf, [role="article"]', { timeout: 10000 }); // Reduzido de 20s para 10s
   } catch (e) {
     console.log('[scraper] aviso: a página demorou muito para mostrar resultados.');
   }
@@ -93,7 +93,7 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
   const processedNames = new Set();
   let consecutiveEmptyCycles = 0;
 
-  while (results.length < limit && consecutiveEmptyCycles < 10) {
+  while (results.length < limit && consecutiveEmptyCycles < 5) { // Reduzido de 10 para 5
     // Seletores super abrangentes
     const cards = await page.$$('.Nv2Y3c, .Ua6K6, .jVST6d, [role="article"], a.hfpxzc');
     let newFoundInBatch = false;
@@ -112,17 +112,15 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
         console.log(`[scraper] analisando: "${name}"...`);
         await card.click();
         
-        // Sincronização Panel - Espera o painel "acordar" com dados reais
+        // Sincronização Panel - SUPER RÁPIDA
         try {
-          await page.waitForFunction((expectedName) => {
+          await page.waitForFunction(() => {
             const panel = document.querySelector('h1.DUwDvf');
-            const hasInfo = !!document.querySelector('button[data-item-id="address"]') || !!document.querySelector('button[data-item-id^="phone:tel:"]');
-            return panel?.textContent?.length > 1 && hasInfo;
-          }, { timeout: 2000 }); // Reduzido de 4000ms para 2000ms
+            return panel?.textContent?.length > 1;
+          }, { timeout: 1000 }); // Reduzido de 2000ms para 1000ms
         } catch (e) {
-          console.log(`[scraper] painel lento para "${name}", tentando reforçar o clique...`);
-          await card.click(); // Re-clique de segurança
-          await new Promise(r => setTimeout(r, 800)); // Reduzido de 1500ms para 800ms
+          // Pula se demorar muito
+          continue;
         }
 
         const data = await page.evaluate(() => {
@@ -184,7 +182,7 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
 
         results.push(finalLead);
         console.log(`[✓] ${results.length}/${limit}: ${finalLead.name} (${finalLead.type.toUpperCase()})`);
-        await new Promise(r => setTimeout(r, 200)); // Reduzido de 500ms para 200ms
+        await new Promise(r => setTimeout(r, 100)); // Reduzido de 200ms para 100ms
 
       } catch (err) {
         console.log(`[scraper] erro em card: ${err.message}`);
@@ -195,9 +193,9 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
       consecutiveEmptyCycles++;
       await page.evaluate(() => {
         const feed = document.querySelector('div[role="feed"]');
-        if (feed) feed.scrollTop += 1200; // Scroll mais agressivo
+        if (feed) feed.scrollTop += 1500; // Scroll ainda mais agressivo
       });
-      await new Promise(r => setTimeout(r, 800)); // Reduzido de 1500ms para 800ms
+      await new Promise(r => setTimeout(r, 500)); // Reduzido de 800ms para 500ms
     }
   }
 
