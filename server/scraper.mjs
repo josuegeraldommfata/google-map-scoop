@@ -62,28 +62,8 @@ const PORT = process.env.PORT || 3001;
 
 // ─── Scraper Engine ───────────────────────────────────────────────────────────
 
-async function enrichFromWebsite(url) {
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    
-    const content = await page.content();
-    const instagramMatch = content.match(/instagram\.com\/([a-zA-Z0-9._]+)/);
-    const whatsappMatch = content.match(/api\.whatsapp\.com\/send\?phone=(\d+)|wa\.me\/(\d+)/);
-    
-    return {
-      instagram: instagramMatch ? `https://www.instagram.com/${instagramMatch[1]}` : null,
-      whatsapp: whatsappMatch ? `https://wa.me/${whatsappMatch[1] || whatsappMatch[2]}` : null
-    };
-  } catch (e) {
-    return { instagram: null, whatsapp: null };
-  } finally {
-    if (browser) await browser.close();
-  }
-}
+// Função de enriquecimento DESABILITADA para velocidade
+// async function enrichFromWebsite(url) { ... }
 
 async function scrapeGoogleMaps(page, query, limit = 20) {
   const { niche, city, state } = query;
@@ -138,11 +118,11 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
             const panel = document.querySelector('h1.DUwDvf');
             const hasInfo = !!document.querySelector('button[data-item-id="address"]') || !!document.querySelector('button[data-item-id^="phone:tel:"]');
             return panel?.textContent?.length > 1 && hasInfo;
-          }, { timeout: 4000 });
+          }, { timeout: 2000 }); // Reduzido de 4000ms para 2000ms
         } catch (e) {
           console.log(`[scraper] painel lento para "${name}", tentando reforçar o clique...`);
           await card.click(); // Re-clique de segurança
-          await new Promise(r => setTimeout(r, 1500));
+          await new Promise(r => setTimeout(r, 800)); // Reduzido de 1500ms para 800ms
         }
 
         const data = await page.evaluate(() => {
@@ -191,24 +171,20 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
           }
         }
 
-        // WhatsApp/IG do Site
-        if (data.website) {
-          const extra = await enrichFromWebsite(data.website).catch(() => ({ instagram: null, whatsapp: null }));
-          if (extra.instagram) data.instagram = extra.instagram;
-          if (extra.whatsapp) data.whatsapp = extra.whatsapp;
-        }
+        // ENRIQUECIMENTO DE SITE DESABILITADO PARA VELOCIDADE
+        // Se precisar de Instagram/WhatsApp do site, ative depois manualmente
 
         const finalLead = {
           id: `gm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           ...data,
-          name: (data.name && data.name !== 'Sem nome') ? data.name : name, // Fallback para o nome do card
+          name: (data.name && data.name !== 'Sem nome') ? data.name : name,
           city,
           niche
         };
 
         results.push(finalLead);
         console.log(`[✓] ${results.length}/${limit}: ${finalLead.name} (${finalLead.type.toUpperCase()})`);
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 200)); // Reduzido de 500ms para 200ms
 
       } catch (err) {
         console.log(`[scraper] erro em card: ${err.message}`);
@@ -219,9 +195,9 @@ async function scrapeGoogleMaps(page, query, limit = 20) {
       consecutiveEmptyCycles++;
       await page.evaluate(() => {
         const feed = document.querySelector('div[role="feed"]');
-        if (feed) feed.scrollTop += 800;
+        if (feed) feed.scrollTop += 1200; // Scroll mais agressivo
       });
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 800)); // Reduzido de 1500ms para 800ms
     }
   }
 
@@ -255,7 +231,7 @@ app.post('/api/scrape-leads', async (req, res) => {
   const { niche, cities = [], state = 'SP', quantity = 20 } = req.body;
   
   // Limita quantidade para evitar timeout
-  const maxQuantity = Math.min(quantity, 50); // Máximo 50 por requisição
+  const maxQuantity = Math.min(quantity, 300); // Aumentado para 300
   
   console.log(`[api] requisição: ${niche} em ${cities.join(', ')} (Qtd: ${maxQuantity})`);
 
@@ -266,7 +242,7 @@ app.post('/api/scrape-leads', async (req, res) => {
     if (!res.headersSent) {
       res.status(408).json({ error: 'Timeout - tente com menos contatos' });
     }
-  }, 120000); // 2 minutos timeout
+  }, 300000); // 5 minutos timeout (aumentado de 2 para 5)
 
   try {
     browser = await chromium.launch({ 
