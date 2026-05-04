@@ -282,6 +282,16 @@ app.post('/api/scrape-leads', async (req, res) => {
   }
 });
 
+// Middleware de erro global - SEMPRE retorna CORS
+app.use((err, req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  console.error('[api] erro capturado:', err);
+  res.status(500).json({ error: err.message || 'Erro interno do servidor' });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[api] servidor rodando na porta ${PORT}`);
 });
